@@ -138,9 +138,21 @@ export class TixClient {
     return list.map((e: any) => ({ slug: e.slug, title: e.title, status: e.status }));
   }
 
-  async snapshot(): Promise<Snapshot> {
+  private lastOrganiserCheck = 0;
+
+  /**
+   * The event is fetched every time. The organiser listing is only refetched every
+   * organiserPollSeconds; in between, the previous listing is carried forward so it
+   * produces no changes.
+   */
+  async snapshot(previousOrganiserEvents: OrganiserEvent[] | null): Promise<Snapshot> {
     const event = await this.fetchEvent(config.eventSlug);
-    const organiserEvents = config.organiserId ? await this.fetchOrganiserEvents(config.organiserId) : [];
+    let organiserEvents = previousOrganiserEvents ?? [];
+    const due = !previousOrganiserEvents || Date.now() - this.lastOrganiserCheck >= config.organiserPollSeconds * 1000;
+    if (config.organiserId && due) {
+      organiserEvents = await this.fetchOrganiserEvents(config.organiserId);
+      this.lastOrganiserCheck = Date.now();
+    }
     return { takenAt: new Date().toISOString(), event, organiserEvents };
   }
 }

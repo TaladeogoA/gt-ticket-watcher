@@ -56,7 +56,7 @@ async function flushOutbox(state: State): Promise<void> {
 
 /** One full check. Throws if Tix could not be read. */
 async function checkOnce(tix: TixClient, state: State): Promise<void> {
-  const next = await tix.snapshot();
+  const next = await tix.snapshot(state.snapshot?.organiserEvents ?? null);
   const prev = state.snapshot;
 
   if (!prev) {

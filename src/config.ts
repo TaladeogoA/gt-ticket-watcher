@@ -5,7 +5,9 @@ const env = (name: string, fallback = ''): string => (process.env[name] ?? '').t
 export const config = {
   eventSlug: env('TIX_EVENT_SLUG', 'klub-aniko'),
   organiserId: env('TIX_ORGANISER_ID', 'VXNlci04MTUxMDUwMC1hMjEzLTQ3NmYtOTI4Ny1lNzJjZjU0ZDE3MGU='),
-  pollSeconds: Math.max(15, Number(env('POLL_SECONDS', '45')) || 45),
+  pollSeconds: Math.max(15, Number(env('POLL_SECONDS', '60')) || 60),
+  /** The organiser listing is a backup signal, so it is checked less often. */
+  organiserPollSeconds: Math.max(60, Number(env('ORGANISER_POLL_SECONDS', '300')) || 300),
   // Default is a visible window: Tix's Cloudflare rejected headless Chrome when tested (2026-11-14).
   headless: env('HEADLESS', 'false').toLowerCase() === 'true',
   ntfyServer: env('NTFY_SERVER', 'https://ntfy.sh').replace(/\/+$/, ''),
