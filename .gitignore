@@ -1,0 +1,21 @@
+# Captured browser requests - contain live auth tokens. Never commit.
+tix-request.txt
+tix-request.cmd
+*.har
+
+# Secrets and local state
+.env
+.env.*
+!.env.example
+chrome-profile/
+data/
+*.sqlite
+*.sqlite-journal
+
+# Node
+node_modules/
+dist/
+*.log
+
+# Private investigation notes - local only
+NOTES.md

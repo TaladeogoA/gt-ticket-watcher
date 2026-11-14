@@ -1,0 +1,78 @@
+name: Watch Tix
+
+# Always-on watcher. Each run polls Tix every ~45s for a few hours, saves its state,
+# then starts the next run. The cron is only a safety net in case a handover is lost.
+on:
+  workflow_dispatch:
+    inputs:
+      max_minutes:
+        description: Minutes this run should watch before handing over
+        default: '320'
+  schedule:
+    - cron: '17 */3 * * *'
+
+# Only one watcher at a time. A second run waits for the first to finish.
+concurrency:
+  group: tix-watcher
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write # lets a run start its successor
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    env:
+      NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+
+      # State (last snapshot, undelivered alerts, heartbeat clock) travels between
+      # runs through the Actions cache: restore the newest, save a new one at the end.
+      - name: Restore previous state
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            data/state.json
+            data/history.jsonl
+          key: watcher-state-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: watcher-state-
+
+      - name: Watch (visible Chrome on a virtual screen)
+        env:
+          HEADLESS: 'false'
+          MAX_RUNTIME_MINUTES: ${{ inputs.max_minutes || '320' }}
+        run: xvfb-run -a npm start
+
+      - name: Save state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            data/state.json
+            data/history.jsonl
+          key: watcher-state-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Push an alert if this run failed
+        if: failure()
+        run: |
+          curl -s -o /dev/null \
+            -H "Title: GT watcher: GitHub run FAILED" -H "Priority: 4" -H "Tags: warning" \
+            -d "A watcher run on GitHub failed. It will retry in 5 minutes. If these keep coming, you are not protected." \
+            "https://ntfy.sh/$NTFY_TOPIC"
+          sleep 300
+
+      # Not on manual cancel, so cancelling a run in the GitHub UI really stops the chain
+      # (until the next cron tick - disable the workflow to stop it for good).
+      - name: Start the next run
+        if: success() || failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run watch.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
